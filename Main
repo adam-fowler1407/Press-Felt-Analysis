@@ -1,0 +1,69 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
+df = pd.read_csv(r'M:\Kemsley Paper Mill\Technical\Technical\PM4\PM4 Process Improvement Projects - AF\Felt Conditions\6mfeltData.csv') ##importing csv file
+clothingData = pd.read_csv(r'M:\Kemsley Paper Mill\Technical\Technical\PM4\PM4 Processes\Press Section\Clothing Data1.csv') ##importing csv file
+
+
+#Rename Felt data Name column with Felt name and Date added - helps distinguish in data analysis
+clothingData[["d", "m", "y"]] = clothingData["DateON"].str.split("/", expand=True)
+clothingData["Name"] = clothingData["FeltName"]+" "+clothingData["m"]+"/"+clothingData["y"]
+
+df.ffill(axis=0, inplace=True)
+df = df.drop(df["Reel Up"].loc[df["Reel Up"]<50].index) #remove Sheet off periods
+df[['Date','Time1']] = df['Time'].str.split(" ", expand=True)
+
+
+colNames = df.columns.tolist() # set column names as list for the FOR loop
+colNames.remove('Time') # remove Time Column
+colNames.remove('Time1')
+colNames.remove('Date')
+
+feltList = clothingData["Name"].unique().tolist()
+
+df.set_index('Date')
+df[["PickupFelt","TandemFelt","EnpTopFelt"]] =""
+
+
+df["Date"] = pd.to_datetime(df["Date"], format='%d/%m/%Y')
+
+for index, row in clothingData.iterrows():
+    row["DateON"] = pd.to_datetime(row["DateON"], format='%d/%m/%Y')
+    row["DateOFF"] = pd.to_datetime(row["DateOFF"], format='%d/%m/%Y')
+    
+    mask = (df["Date"]> row["DateON"]) & (df["Date"]< row["DateOFF"])
+    
+    if "Top" in row["Name"]:
+        df.loc[mask, "EnpTopFelt"] = row["Name"]
+    elif "Tandem" in row["Name"]:
+        df.loc[mask, "TandemFelt"] = row["Name"]
+    elif "Pick" in row["Name"]:
+        df.loc[mask, "PickupFelt"] = row["Name"]
+
+df = df.drop(df["TandemFelt"].loc[df["TandemFelt"]==''].index)
+df = df.drop(df["EnpTopFelt"].loc[df["EnpTopFelt"]==''].index)
+df = df.drop(df["PickupFelt"].loc[df["PickupFelt"]==''].index)
+df1=df
+
+for i in colNames:
+    Q1 = np.nanquantile(df1[i], .25)
+    Q3 = np.nanquantile(df1[i], .75)
+    QR = Q1 - Q3   #IQR is interquartile range. 
+    df1 = df1.drop(df1[i].loc[(df1[i] > (Q1 - 2.5 * QR))].index)
+    df1 = df1.drop(df1[i].loc[(df1[i] < (Q3 + 2.5 * QR))].index)
+#------------------------------------------------------------------------------------#
+
+def MyBoxPlots(x, y, data, hue): # Graph Function with brand colours
+    colours = ['#ff7900']
+    sns.set_palette(sns.color_palette(colours))
+    g = sns.catplot( x=x, y=y, hue=hue, data=data, showfliers=False, height=5, aspect=2, kind='box')
+    g.set_xticklabels(rotation=90)
+    plt.title(x+" Distribution per "+y, fontsize = 25, color="#4d4d4d", font="Veranda")
+    plt.ylabel(y)
+    plt.yticks(fontsize=10)
+    
+MyBoxPlots('PickupFelt', 'Pick Up Eco Flow', df1, None)
+# MyBoxPlots('TandemFelt', 'Tandem Eco Flow', df1, None)
+# MyBoxPlots('EnpTopFelt', 'Enp Top Eco Flow', df1, None)
